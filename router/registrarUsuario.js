@@ -1,49 +1,53 @@
-import userModel from "../model/userSchame.js";
+import bcrypt from "bcrypt";
+import userModel from "../model/userSchame.js"; // asegúrate que este path es correcto
 
-import bcrypt from "bcrypt"; // Para hashear la contraseña
-
-// Registrar usuario
+// Controlador para registrar un usuario
 const registrarUsuario = async (req, res) => {
   try {
-    const { email, password, username } = req.body;
+    const { name, username, email, password } = req.body;
 
-    // 1️⃣ Validar campos vacíos
-    if (
-      !email ||
-      !password ||
-      !username ||
-      email.trim() === "" ||
-      password.trim() === "" ||
-      username.trim() === ""
-    ) {
-      return res.status(400).json({ msg: "Los campos no pueden estar vacíos" });
+    // 1️⃣ Normaliza el campo "name" (acepta name o username)
+    const finalName = name || username;
+    if (!finalName || finalName.trim() === "") {
+      return res.status(400).json({ error: "El campo 'name' es obligatorio" });
     }
 
-    // 2️⃣ Verificar si el usuario ya existe
-    const usuarioExistente = await userModel.findOne({ email });
-    if (usuarioExistente) {
-      return res.status(400).json({ msg: "El usuario ya existe" });
+    // 2️⃣ Verifica campos requeridos
+    if (!email || email.trim() === "" || !password || password.trim() === "") {
+      return res.status(400).json({ error: "Faltan campos requeridos" });
     }
 
-    // 3️⃣ Hashear la contraseña
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    // 3️⃣ Comprueba si ya existe el usuario
+    const existe = await userModel.findOne({ email });
+    if (existe) {
+      return res.status(400).json({ error: "El correo ya está registrado" });
+    }
 
-    // 4️⃣ Crear instancia del usuario
+    // 4️⃣ Hashea la contraseña
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 5️⃣ Crea el nuevo usuario
     const nuevoUsuario = new userModel({
+      name: finalName, // 🔥 aquí se garantiza que 'name' siempre existe
       email,
-      password: passwordHash,
-      username,
-      createdAt: new Date(),
+      password: hashedPassword,
     });
 
-    // 5️⃣ Guardar en MongoDB
+    // 6️⃣ Guarda en la base de datos
     await nuevoUsuario.save();
 
-    // 6️⃣ Responder al cliente
-    return res.status(200).json({ msg: "Usuario registrado correctamente" });
+    // 7️⃣ Respuesta
+    return res.status(201).json({
+      mensaje: "Usuario registrado correctamente",
+      usuario: {
+        id: nuevoUsuario._id,
+        name: nuevoUsuario.name,
+        email: nuevoUsuario.email,
+      },
+    });
   } catch (error) {
-    console.error(error);
+    console.error("Error en registrarUsuario:", error);
+    return res.status(500).json({ error: "Error del servidor" });
   }
 };
 
