@@ -255,7 +255,7 @@ router.post(
       const event = stripe.webhooks.constructEvent(
         payload,
         sig,
-        "whsec_53u0MrQjdHrr0yAdqfQbFJAwC2UxpCk2"
+        process.env.CSClave
       );
 
       // Cuando se confirma el pago
