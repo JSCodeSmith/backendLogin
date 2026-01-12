@@ -9,9 +9,13 @@ const productoSchema = new mongoose.Schema(
       unique: true,
     },
     categoria: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Categoria",
+      required: true,
+    },
+    nombreCategoria: {
       type: String,
-      required: [true, "La categoría es obligatoria"],
-      trim: true,
+      default: "",
     },
     descripcion: {
       type: String,

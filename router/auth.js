@@ -16,5 +16,5 @@ const verificarToken = (req, res, next) => {
     res.status(401).json({ error: "Token inválido o expirado" });
   }
 };
-// replace(), replaceAll()
+// replace(), replaceAll(), trim
 export default verificarToken;

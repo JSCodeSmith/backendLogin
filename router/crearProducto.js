@@ -51,6 +51,7 @@
 // controllers/crearProducto.js
 import Producto from "../model/Producto.js";
 import { io } from "../index.js";
+import { getIo } from "../util/socketInstance.js";
 
 const crearProducto = async (req, res) => {
   try {
@@ -109,8 +110,14 @@ const crearProducto = async (req, res) => {
 
     // 🔥 Emitir evento en tiempo real
 
-    io.emit("nuevoProducto", nuevoProducto);
-
+    // 🔥 EMITIR POR SOCKET.IO (IMPORTANTE)
+    const io = getIo();
+    if (io) {
+      io.emit("nuevoProducto", nuevoProducto);
+      console.log("📢 Evento 'nuevoProducto' emitido a todos los clientes");
+    } else {
+      console.warn("⚠️ Socket.io no disponible para emitir evento");
+    }
     return res.status(201).json(nuevoProducto);
   } catch (err) {
     // Mostrar error legible en consola

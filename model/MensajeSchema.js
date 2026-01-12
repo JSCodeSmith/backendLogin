@@ -1,13 +1,27 @@
 import mongoose from "mongoose";
 
-const MensajeSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true },
-  texto: { type: String, required: true },
-  remitenteId: { type: String, required: true },
-  destinatarioId: { type: String, required: true },
-  chatId: { type: String, required: true },
-  fecha: { type: Date, default: Date.now },
-});
+const MensajeSchema = new mongoose.Schema(
+  {
+    texto: { type: String, required: true },
+    remitente: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Usuario",
+      required: true,
+    },
+    destinatario: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Usuario",
+      required: true,
+    },
+    chat: { type: mongoose.Schema.Types.ObjectId, ref: "Chat", required: true },
+    estado: {
+      type: String,
+      enum: ["pendiente", "entregado", "leido"],
+      default: "pendiente",
+    },
+  },
+  { timestamps: true }
+);
 
 const Mensaje = mongoose.model("Mensaje", MensajeSchema);
 export default Mensaje;

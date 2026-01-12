@@ -40,12 +40,15 @@ import ventas from "./ventas.js";
 import EliminarCuenta from "./EliminarCuenta.js";
 import verificarPromocion from "./verificarPromocion.js";
 
-import crearMensaje from "../router/crearMensaje.js";
+// import crearMensaje from "../router/crearMensaje.js";
 import editarMensaje from "../router/EditarMnesaje.js";
 import eliminarMensaje from "../router/eliminarMensaje.js";
 import reenviarMensaje from "../router/reenviarMensaje.js";
 import verificarToken from "../router/auth.js";
 import Mensaje from "../model/MensajeSchema.js";
+import User from "../model/userSchame.js";
+
+// Al inicio de tu router.js o antes de las rutas de productos
 
 // Configurar Cloudinary
 cloudinary.config({
@@ -97,6 +100,8 @@ router.get("/listarPedidos", async (req, res) => {
   }
 });
 
+// 🔹 Obtener un producto por ID (para editar)
+
 //
 // 🔹 USUARIOS
 //
@@ -137,7 +142,7 @@ router.get("/todos", async (req, res) => {
       })),
       ...registeredUsers.map((u) => ({
         _id: u._id,
-        nombre: u.name || "Sin nombre",
+        nombre: u.username,
         correo: u.email,
         rol: "Cliente",
         estado: "activo",
@@ -159,8 +164,102 @@ router.delete("/usuarios/:id", eliminarUsuario);
 //
 // 🔹 PRODUCTOS (Cloudinary + Multer)
 //
+// 🔹 PRODUCTOS - ORDEN CORRECTO (FINAL):
 
+// 1. RUTA ESPECÍFICA CATALOGO
+router.get("/productos/catalogo", async (req, res) => {
+  try {
+    console.log("🎯 GET /productos/catalogo ejecutado");
+    const productos = await Producto.find().sort({ createdAt: -1 });
+    res.json({ productos });
+  } catch (error) {
+    console.error("Error en /catalogo:", error);
+    res.status(500).json({ error: "Error al obtener productos" });
+  }
+});
+
+// 2. RUTA PARA OBTENER UN PRODUCTO POR ID (¡DEBE IR AQUÍ!)
+router.get("/productos/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log("🔍 GET /productos/:id - ID recibido:", id);
+
+    // ⚠️ CASO ESPECIAL: Si el ID es "catalogo", alguien está llamando mal
+    if (id === "catalogo") {
+      console.log("⚠️ Petición a /productos/catalogo detectada");
+      console.log(
+        "ℹ️ Esta ruta es para obtener UN producto, usar /productos para todos"
+      );
+
+      // Opción A: Redirigir al comportamiento correcto (obtener todos)
+      const productos = await Producto.find().sort({ createdAt: -1 });
+      return res.json({ productos });
+    }
+
+    // Validar formato del ID (solo si NO es "catalogo")
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "ID de producto no válido. Debe ser un ObjectId de 24 caracteres hexadecimales",
+        idRecibido: id,
+      });
+    }
+
+    // Buscar producto con categoría poblada
+    const producto = await Producto.findById(id)
+      .populate("categoria", "nombre icono _id")
+      .exec();
+
+    if (!producto) {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado",
+        id: id,
+      });
+    }
+
+    console.log(`✅ Producto encontrado: ${producto.nombre}`);
+
+    // Responder con el producto
+    return res.json({
+      success: true,
+      producto: {
+        _id: producto._id,
+        nombre: producto.nombre,
+        descripcion: producto.descripcion,
+        precio: producto.precio,
+        stock: producto.stock,
+        categoria: producto.categoria?._id || producto.categoria,
+        categoriaCompleta: producto.categoria,
+        imagen: producto.imagen,
+        createdAt: producto.createdAt,
+        updatedAt: producto.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error GET /productos/:id:", error);
+
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: "ID de producto inválido",
+        error: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: error.message,
+    });
+  }
+});
+
+// 3. RUTA GENERAL (lista todos)
 router.get("/productos", listarProductos);
+
+// 4. RUTAS DE CRUD
 router.post("/productos", upload.single("imagen"), crearProducto);
 router.put("/productos/:id", upload.single("imagen"), editarProducto);
 
@@ -181,18 +280,6 @@ router.delete("/productos/:id", async (req, res) => {
     return res.status(500).json({ message: "Error interno del servidor." });
   }
 });
-
-router.get("/productos/catalogo", async (req, res) => {
-  try {
-    const productos = await Producto.find().sort({ createdAt: -1 });
-    res.json({ productos });
-  } catch (error) {
-    console.error("Error al obtener productos:", error);
-    res.status(500).json({ error: "Error al obtener productos" });
-  }
-});
-
-//
 // 🔹 PROMOCIONES
 //
 router.get("/promociones", obtenerPromociones);
@@ -300,7 +387,7 @@ router.get("/session/:id", async (req, res) => {
   }
 });
 
-router.delete("/delete", EliminarCuenta);
+router.delete("/eliminar-cuenta", EliminarCuenta);
 
 router.post("/verificar", verificarPromocion);
 
@@ -312,27 +399,27 @@ const validar = (req, res, next) => {
   next();
 };
 
-router.post(
-  "/crear",
-  verificarToken,
-  [
-    body("chatId").notEmpty().withMessage("chatId requerido"),
-    body("remitenteId").notEmpty().withMessage("remitenteId requerido"),
-    body("destinatarioId").notEmpty().withMessage("destinatarioId requerido"),
-    body("texto")
-      .isLength({ min: 1 })
-      .withMessage("El mensaje no puede estar vacío"),
-  ],
-  validar,
-  async (req, res) => {
-    try {
-      const nuevo = await crearMensaje(req.body);
-      res.status(201).json(nuevo);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  }
-);
+// router.post(
+//   "/crear",
+//   verificarToken,
+//   [
+//     body("chatId").notEmpty().withMessage("chatId requerido"),
+//     body("remitenteId").notEmpty().withMessage("remitenteId requerido"),
+//     body("destinatarioId").notEmpty().withMessage("destinatarioId requerido"),
+//     body("texto")
+//       .isLength({ min: 1 })
+//       .withMessage("El mensaje no puede estar vacío"),
+//   ],
+//   validar,
+//   async (req, res) => {
+//     try {
+//       const nuevo = await crearMensaje(req.body);
+//       res.status(201).json(nuevo);
+//     } catch (err) {
+//       res.status(500).json({ error: err.message });
+//     }
+//   }
+// );
 
 // ✏️ Editar mensaje
 router.post(
@@ -402,6 +489,12 @@ router.post(
     }
   }
 );
+
+router.get("/admin", async (req, res) => {
+  const admin = await Usuario.findOne({ rol: "Administrador" });
+  if (!admin) return res.status(404).json({ message: "No hay admin" });
+  res.json(admin);
+});
 
 router.get("/mensajes/:chatId", async (req, res) => {
   try {
